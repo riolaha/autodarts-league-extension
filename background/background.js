@@ -36,26 +36,31 @@ chrome.webRequest.onCompleted.addListener(
     // no more network calls for this match ID ever again.
     if (fetchedMatches.has(matchId)) return;
 
+    // Mark BEFORE the first await so concurrent listener invocations for
+    // the same matchId short-circuit immediately, preventing duplicate POSTs.
+    fetchedMatches.add(matchId);
+
     console.log('[ADLeague BG] Detected stats request:', url);
 
     try {
       const res = await fetch(url, { credentials: 'include' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        fetchedMatches.delete(matchId); // allow retry on network error
+        return;
+      }
       const data = await res.json();
 
       if (!data.finishedAt) {
-        // Match still in progress — don't mark as fetched yet so we
-        // pick it up again when the next poll returns a finished state.
+        // Match still in progress — remove so we pick it up when it finishes.
+        fetchedMatches.delete(matchId);
         return;
       }
 
-      // Mark as done NOW, before any async work, so concurrent listener
-      // invocations for the same match immediately short-circuit.
-      fetchedMatches.add(matchId);
       setTimeout(() => fetchedMatches.delete(matchId), 600_000);
 
       await handleMatchStats(url, data);
     } catch (err) {
+      fetchedMatches.delete(matchId); // allow retry on error
       console.error('[ADLeague BG] Failed to re-fetch stats:', err);
     }
   },

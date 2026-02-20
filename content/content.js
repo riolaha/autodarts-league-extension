@@ -429,6 +429,11 @@
       });
       const started = await apiFetch(`/tournaments/${t.id}/start`, { method: 'POST' });
 
+      // The extension may have been reloaded while the API calls were in-flight.
+      // Check before touching chrome APIs to surface a clear message instead of
+      // the raw "Extension context invalidated" error.
+      if (!chrome?.runtime?.id) throw new Error('Extension was reloaded — please refresh this tab.');
+
       await chrome.storage.local.set({
         activeTournamentId: started.id,
         activeTournament:   started,
@@ -437,7 +442,9 @@
 
       await showTournamentView(page, started.id);
     } catch (err) {
-      errEl.textContent = err.message;
+      errEl.textContent = err.message?.includes('Extension context invalidated')
+        ? 'Extension was reloaded — please refresh this tab.'
+        : err.message;
       btn.disabled    = false;
       btn.textContent = 'Create & Start Tournament';
     }
@@ -616,7 +623,7 @@
       this.disabled = true;
       this.textContent = 'Creating lobby…';
       try {
-        await createLobby(tournament);
+        await createLobby(tournament, f);
       } catch (err) {
         alert('Failed to create lobby: ' + err.message);
         this.disabled = false;
@@ -625,7 +632,7 @@
     });
   }
 
-  async function createLobby(tournament) {
+  async function createLobby(tournament, fixture) {
     const isX01 = /^\d+$/.test(tournament.gameMode);
     const body = {
       bullOffMode: 'Off',
@@ -653,7 +660,34 @@
     const lobbyId = data.id;
     if (!lobbyId) throw new Error('No lobby ID in response');
 
+    await sendLobbyInvitations(lobbyId, fixture);
+
     window.location.href = `https://play.autodarts.io/lobbies/${lobbyId}`;
+  }
+
+  async function sendLobbyInvitations(lobbyId, fixture) {
+    // Identify the currently logged-in Autodarts user so we can skip inviting the host
+    // and detect whether they need to be removed from the lobby
+    let hostUserId = null;
+    try {
+      const meRes = await fetch('https://api.autodarts.io/as/v0/users/me', { credentials: 'include' });
+      if (meRes.ok) {
+        const me = await meRes.json();
+        hostUserId = me.id ?? null;
+      }
+    } catch (_) {}
+
+    // Invite both players who have a real Autodarts account UUID, skipping the host
+    const toInvite = [fixture.homePlayer, fixture.awayPlayer].filter(
+      p => p.autodartsUserId && p.autodartsUserId !== hostUserId
+    );
+
+    await Promise.allSettled(toInvite.map(p =>
+      fetch(`https://api.autodarts.io/gs/v0/lobbies/${lobbyId}/invitations/${p.autodartsUserId}`, {
+        method:      'POST',
+        credentials: 'include',
+      })
+    ));
   }
 
   // ── Background message listener ───────────────────────────────
