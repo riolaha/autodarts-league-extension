@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Autodarts League",
+  "version": "1.0.0",
+  "description": "Create and manage round-robin darts leagues with your real Autodarts accounts",
+  "permissions": ["storage", "webRequest"],
+  "host_permissions": [
+    "http://localhost:8080/*",
+    "https://api.autodarts.io/*",
+    "https://*.autodarts.io/*"
+  ],
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://autodarts.io/*",
+        "https://*.autodarts.io/*",
+        "http://autodarts.io/*",
+        "http://*.autodarts.io/*"
+      ],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Autodarts League"
+  }
+}
