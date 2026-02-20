@@ -9,8 +9,9 @@
    the Spring Boot backend and notifies the popup.
    ============================================================= */
 
-const BACKEND    = 'https://autodarts-league-extension-backend-production.up.railway.app/api';
-const STATS_PATH = '/as/v0/matches/';          // api.autodarts.io/as/v0/matches/{id}/stats
+const BACKEND      = 'https://autodarts-league-extension-backend-production.up.railway.app/api';
+const STATS_PATH   = '/as/v0/matches/';   // api.autodarts.io/as/v0/matches/{id}/stats
+const FRIENDS_PATH = '/as/v0/friends';    // api.autodarts.io/as/v0/friends
 
 // ── Watch for Autodarts match-stats requests ──────────────────
 // Fires for requests from ANY browser context (main thread, web
@@ -21,9 +22,25 @@ const STATS_PATH = '/as/v0/matches/';          // api.autodarts.io/as/v0/matches
 // a finished match no matter how many times the app polls it.
 const fetchedMatches = new Set();
 
+// Cooldown so the friends list is only synced once per session
+// even if Autodarts polls it repeatedly.
+let lastFriendsSync = 0;
+
 chrome.webRequest.onCompleted.addListener(
   async (details) => {
     const url = details.url;
+
+    // ── Friends list — sync Autodarts friends to backend ───────
+    if (
+      details.method === 'GET' &&
+      url.includes(FRIENDS_PATH) &&
+      !url.includes('by-username') &&
+      Date.now() - lastFriendsSync > 60_000
+    ) {
+      lastFriendsSync = Date.now();
+      syncFriends(url);
+      return;
+    }
 
     if (!url.includes(STATS_PATH) || !url.includes('/stats')) return;
 
@@ -181,6 +198,34 @@ function extractResult(data) {
     homeAvg:      s0.average ?? null,
     awayAvg:      s1.average ?? null,
   };
+}
+
+// ── Sync Autodarts friends list to the backend ────────────────
+async function syncFriends(url) {
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return;
+    const friends = await res.json();
+    if (!Array.isArray(friends)) return;
+
+    await Promise.allSettled(
+      friends
+        .filter(f => f.user?.id && f.user?.name)
+        .map(f => fetch(`${BACKEND}/players`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            displayName:       f.user.name,
+            autodartsUsername: f.user.name,
+            autodartsUserId:   f.user.id,
+          }),
+        }))
+    );
+
+    console.log('[ADLeague BG] Friends synced:', friends.length, 'entries processed.');
+  } catch (err) {
+    console.error('[ADLeague BG] Failed to sync friends:', err);
+  }
 }
 
 function matchPlayer(tournamentPlayers, name) {
