@@ -10,7 +10,7 @@
 
 (function adleague() {
 
-  const BACKEND          = 'http://localhost:8080/api';
+  const BACKEND          = 'https://autodarts-league-extension-backend-production.up.railway.app/api';
   const NAV_SELECTOR     = '.css-1kwqbwj';
   const CONTENT_SELECTOR = '.css-nfhdnc';
   const NAV_ID           = 'adl-nav-link';

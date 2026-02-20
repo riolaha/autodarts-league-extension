@@ -9,7 +9,7 @@
    the Spring Boot backend and notifies the popup.
    ============================================================= */
 
-const BACKEND    = 'http://localhost:8080/api';
+const BACKEND    = 'https://autodarts-league-extension-backend-production.up.railway.app/api';
 const STATS_PATH = '/as/v0/matches/';          // api.autodarts.io/as/v0/matches/{id}/stats
 
 // ── Watch for Autodarts match-stats requests ──────────────────
@@ -191,13 +191,3 @@ function matchPlayer(tournamentPlayers, name) {
     p.displayName.toLowerCase().trim() === n
   ) ?? null;
 }
-
-// ── Handle messages from popup ────────────────────────────────
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === 'PING_BACKEND') {
-    fetch(`${BACKEND}/players`, { signal: AbortSignal.timeout(2000) })
-      .then(() => sendResponse({ ok: true }))
-      .catch(() => sendResponse({ ok: false }));
-    return true;
-  }
-});

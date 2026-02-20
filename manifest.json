@@ -5,7 +5,7 @@
   "description": "Create and manage round-robin darts leagues with your real Autodarts accounts",
   "permissions": ["storage", "webRequest"],
   "host_permissions": [
-    "http://localhost:8080/*",
+    "https://autodarts-league-extension-backend-production.up.railway.app/*",
     "https://api.autodarts.io/*",
     "https://*.autodarts.io/*"
   ],
